@@ -16,7 +16,7 @@ const login = async () => {
   try {
     await authStore.login(form);
 
-    router.push("/products");
+    router.push("/assistant");
   } catch (error) {
     alert("Correo o contraseña incorrectos");
     console.error(error);
@@ -105,12 +105,15 @@ const login = async () => {
     align-items: center;
     min-height: 100vh;
 
+    padding: 20px;
+
     background: #f5f7fb;
 }
 
 .login__card {
 
-    width: 430px;
+    width: 100%;
+    max-width: 430px;
 
     background: white;
 
@@ -250,6 +253,35 @@ const login = async () => {
 .login__button:hover{
 
     background:#1d4ed8;
+
+}
+
+/* ========================= */
+/* Mobile */
+/* ========================= */
+
+@media (max-width:480px){
+
+.login__card{
+
+    padding:30px 24px;
+
+}
+
+.login__header h1{
+
+    font-size:26px;
+
+}
+
+.login__logo{
+
+    width:56px;
+    height:56px;
+
+    font-size:28px;
+
+}
 
 }
 </style>

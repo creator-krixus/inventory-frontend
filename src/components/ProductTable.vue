@@ -25,12 +25,12 @@ const capitalize = (text) => {
     <div class="product-table__header">
       <h1 class="product-table__title">Productos</h1>
 
-      <button
+      <!-- <button
         class="product-table__button"
         @click="emit('new')"
       >
         + Nuevo producto
-      </button>
+      </button> -->
     </div>
 
     <div class="product-table__content">
@@ -42,7 +42,7 @@ const capitalize = (text) => {
             <th class="table__name">Nombre</th>
             <th class="table__name">Precio</th>
             <th class="table__name">Stock</th>
-            <th class="table__actions">Acciones</th>
+            <!-- <th class="table__actions">Acciones</th> -->
           </tr>
         </thead>
 
@@ -68,7 +68,7 @@ const capitalize = (text) => {
               }).format(product.stock) }}
             </td>
 
-            <td class="table__actions">
+            <!-- <td class="table__actions">
 
               <button class="btn btn--edit" @click="emit('edit', product)">
                 ✏️
@@ -78,7 +78,7 @@ const capitalize = (text) => {
                 🗑️
               </button>
 
-            </td>
+            </td> -->
 
           </tr>
 
@@ -98,6 +98,7 @@ const capitalize = (text) => {
     border-radius:12px;
     padding:25px;
     box-shadow:0 10px 25px rgba(0,0,0,.08);
+    width: 100%;
 }
 
 .product-table__header{
@@ -145,7 +146,7 @@ const capitalize = (text) => {
 }
 
 .table td{
-    padding:18px 15px;
+    padding:18px 10px;
     border-bottom:1px solid #f1f5f9;
     font-weight: 500;
     color:#16171a;

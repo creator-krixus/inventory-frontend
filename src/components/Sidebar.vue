@@ -39,6 +39,18 @@ const logout = () => {
         <nav class="sidebar__menu">
 
             <RouterLink
+                to="/assistant"
+                class="sidebar__item"
+                active-class="sidebar__item--active"
+            >
+
+                🤖
+
+                <span class="sidebar__label">Asistente IA</span>
+
+            </RouterLink>
+
+            <RouterLink
                 to="/products"
                 class="sidebar__item"
                 active-class="sidebar__item--active"
@@ -46,7 +58,7 @@ const logout = () => {
 
                 📦
 
-                <span>Productos</span>
+                <span class="sidebar__label">Productos</span>
 
             </RouterLink>
 
@@ -56,12 +68,13 @@ const logout = () => {
 
     <button
         class="sidebar__logout"
+        title="Cerrar sesión"
         @click="logout"
     >
 
         🚪
 
-        Cerrar sesión
+        <span>Cerrar sesión</span>
 
     </button>
 

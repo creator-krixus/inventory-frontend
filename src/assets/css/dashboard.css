@@ -99,4 +99,94 @@ a{
 .dashboard__content{
     flex:1;
     padding:20px;
+    display:flex;
+    flex-direction:column;
+    min-width:0;
+    /* min-height:0 evita que hijos con scroll interno (ej. el chat)
+       desborden el contenedor flex en vez de scrollear ellos mismos */
+    min-height:0;
+}
+
+/* ========================= */
+/* Tablet */
+/* ========================= */
+
+@media (max-width:1024px){
+
+.sidebar{
+    width:190px;
+    padding:20px 14px;
+}
+
+.dashboard__content{
+    padding:16px;
+}
+
+}
+
+/* ========================= */
+/* Mobile */
+/* ========================= */
+
+@media (max-width:768px){
+
+.dashboard{
+    flex-direction:column;
+}
+
+.sidebar{
+    width:100%;
+    flex-direction:row;
+    align-items:center;
+    padding:14px 16px;
+    gap:14px;
+}
+
+.sidebar > div:first-child{
+    display:flex;
+    align-items:center;
+    gap:14px;
+    flex:1;
+    min-width:0;
+}
+
+.sidebar__logo{
+    margin-bottom:0;
+    flex-shrink:0;
+}
+
+.sidebar__logo h2{
+    display:none;
+}
+
+.sidebar__menu{
+    flex-direction:row;
+    gap:6px;
+    overflow-x:auto;
+}
+
+.sidebar__item{
+    flex-shrink:0;
+    padding:10px 12px;
+    white-space:nowrap;
+}
+
+.sidebar__logout{
+    flex-shrink:0;
+    white-space:nowrap;
+    padding:10px 12px;
+}
+
+.sidebar__logout span{
+    display:none;
+}
+
+.dashboard__content{
+    padding:14px;
+}
+
+.sidebar__label{
+  display: none;
+}
+
 }
