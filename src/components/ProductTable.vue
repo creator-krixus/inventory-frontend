@@ -131,6 +131,7 @@ const capitalize = (text) => {
 
 .product-table__content{
     overflow-x:auto;
+    width: 100%;
 }
 
 .table{
@@ -140,13 +141,13 @@ const capitalize = (text) => {
 
 .table th{
     text-align:left;
-    padding:10px;
+    padding:10px 0px;
     font-size:20px;
     border-bottom:1px solid #e5e7eb;
 }
 
 .table td{
-    padding:18px 10px;
+    padding:14px 0px;
     border-bottom:1px solid #f1f5f9;
     font-weight: 500;
     color:#16171a;
@@ -156,9 +157,9 @@ const capitalize = (text) => {
     background:#f8fafc;
 }
 
-.table__actions{
+/* .table__actions{
     width:120px;
-}
+} */
 
 .btn{
     border:none;
@@ -209,10 +210,6 @@ const capitalize = (text) => {
 
 .product-table__button{
     width:100%;
-}
-
-.table{
-    min-width:600px;
 }
 
 }
