@@ -12,8 +12,9 @@ const loading = computed(() => store.loading);
 
 const suggestions = [
   "¿Qué productos tengo en el inventario?",
-  "¿Cuánto stock tengo de COB-001?",
-  "Registra el ingreso de 20 unidades de COB-001 a 30000 cada una, compra a proveedor",
+  "¿Cuánto stock tengo de arroz?",
+  "Registra el ingreso de 20 unidades de arroz caribe precio de compra 2100, precio de venta 2900",
+  "¿Cual es el valor total de mi inventario?"
 ];
 
 const scrollToBottom = async () => {
@@ -385,6 +386,7 @@ const clearChat = () => {
 .chat__messages {
   padding: 14px;
   gap: 10px;
+  height: 200px;
 }
 
 .chat__bubble {

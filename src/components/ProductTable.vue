@@ -39,6 +39,7 @@ const capitalize = (text) => {
 
         <thead>
           <tr>
+            <th class="table__name">Ref</th>
             <th class="table__name">Nombre</th>
             <th class="table__name">Precio</th>
             <th class="table__name">Stock</th>
@@ -52,6 +53,8 @@ const capitalize = (text) => {
             v-for="product in products"
             :key="product._id"
           >
+
+            <td>{{ product.reference }}</td>
             <td>{{ capitalize(product.name) }}</td>
 
             <td>
