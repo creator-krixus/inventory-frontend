@@ -110,7 +110,7 @@ const clearChat = () => {
       <textarea
         v-model="input"
         rows="1"
-        placeholder="Escribe un mensaje... (Enter para enviar, Shift+Enter para salto de línea)"
+        placeholder="Escribe un mensaje..."
         :disabled="loading"
         @keydown="handleKeydown"
       ></textarea>
@@ -399,6 +399,10 @@ const clearChat = () => {
 .chat__send {
   width: 42px;
   height: 42px;
+}
+
+.chat__empty {
+  margin: 20px 0;
 }
 
 }
