@@ -217,7 +217,7 @@ onBeforeUnmount(() => {
       <textarea
         v-model="input"
         rows="1"
-        :placeholder="isRecording ? 'Escuchando...' : 'Escribe un mensaje... (Enter para enviar, Shift+Enter para salto de línea)'"
+        :placeholder="isRecording ? 'Escuchando...' : 'Habla con el asistente'"
         :disabled="loading"
         @keydown="handleKeydown"
       ></textarea>
