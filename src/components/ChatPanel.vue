@@ -62,11 +62,19 @@ const isRecording = ref(false);
 const voiceError = ref("");
 
 let recognition = null;
+// Texto que ya había en el input antes de esta sesión de grabación, para
+// no perderlo si el usuario vuelve a tocar el micrófono a completar la frase.
+let baseText = "";
 
 const createRecognition = () => {
   const instance = new SpeechRecognitionApi();
   instance.lang = "es-CO";
-  instance.continuous = true;
+  // continuous:false — el reconocimiento se detiene solo apenas termina
+  // la frase, en vez de quedar escuchando indefinidamente. Con
+  // continuous:true, Chrome reinicia el motor internamente tras silencios
+  // o ruido de fondo, y al reiniciar vuelve a transcribir parte del audio
+  // ya procesado — eso es lo que causaba las palabras repetidas.
+  instance.continuous = false;
   instance.interimResults = true;
 
   instance.onresult = (event) => {
@@ -74,7 +82,7 @@ const createRecognition = () => {
     for (let i = 0; i < event.results.length; i += 1) {
       transcript += event.results[i][0].transcript;
     }
-    input.value = transcript;
+    input.value = baseText + transcript;
   };
 
   instance.onerror = (event) => {
@@ -111,7 +119,9 @@ const toggleRecording = () => {
   }
 
   voiceError.value = "";
-  input.value = "";
+  // Conserva lo que ya estaba escrito (ej. si el usuario pausó a mitad de
+  // la frase y vuelve a tocar el micrófono para continuar dictando).
+  baseText = input.value ? `${input.value} ` : "";
   isRecording.value = true;
 
   try {
@@ -207,7 +217,7 @@ onBeforeUnmount(() => {
       <textarea
         v-model="input"
         rows="1"
-        :placeholder="isRecording ? 'Escuchando...' : 'Habla con el asistente'"
+        :placeholder="isRecording ? 'Escuchando...' : 'Escribe un mensaje... (Enter para enviar, Shift+Enter para salto de línea)'"
         :disabled="loading"
         @keydown="handleKeydown"
       ></textarea>
