@@ -70,7 +70,7 @@ const login = async () => {
 
         </div>
 
-        <div class="login__options">
+        <!-- <div class="login__options">
 
           <label>
 
@@ -83,7 +83,7 @@ const login = async () => {
 
           </label>
 
-        </div>
+        </div> -->
 
         <button class="login__button">
 
