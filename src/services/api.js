@@ -29,6 +29,12 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && window.location.pathname !== "/login") {
       localStorage.removeItem("token");
       localStorage.removeItem("user");
+      // window.location.href hace un reload completo, así que el store de
+      // Pinia en memoria se reinicia solo. Pero sessionStorage sobrevive un
+      // reload dentro de la misma pestaña, así que hay que limpiarlo
+      // explícitamente para no dejar la conversación del agente expuesta
+      // al siguiente usuario que inicie sesión en esta misma pestaña.
+      sessionStorage.removeItem("agent-chat-state");
       window.location.href = "/login";
     }
 

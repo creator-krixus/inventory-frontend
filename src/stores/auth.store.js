@@ -1,5 +1,6 @@
 import { defineStore } from "pinia";
 import * as authService from "../services/auth.service";
+import { useAgentStore } from "./agent.store";
 
 export const useAuthStore = defineStore("auth", {
   state: () => ({
@@ -28,6 +29,11 @@ export const useAuthStore = defineStore("auth", {
 
       localStorage.removeItem("token");
       localStorage.removeItem("user");
+
+      // Importante: si no se limpia, la conversación con el agente (que
+      // puede incluir datos de inventario) quedaría visible para el
+      // siguiente usuario que inicie sesión en la misma pestaña.
+      useAgentStore().reset();
     },
   },
 });
