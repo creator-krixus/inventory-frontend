@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { useAgentStore } from "../stores/agent.store";
 
 const store = useAgentStore();
@@ -12,8 +12,7 @@ const loading = computed(() => store.loading);
 
 const suggestions = [
   "¿Qué productos tengo en el inventario?",
-  "¿Cuánto stock tengo de arroz?",
-  "Registra el ingreso de 20 unidades de arroz caribe precio de compra 2100, precio de venta 2900",
+  "¿Cuáles son los prductos con el stock mas bajo?",
   "¿Cual es el valor total de mi inventario?"
 ];
 
@@ -48,6 +47,90 @@ const clearChat = () => {
   const confirmed = confirm("¿Borrar toda la conversación con el asistente?");
   if (confirmed) store.reset();
 };
+
+// ---- Entrada por voz (Web Speech API) ----
+// Solo Chrome/Edge y Chrome Android la soportan bien (Safari/iOS no).
+// Si el navegador no la soporta, isVoiceSupported queda en false y el
+// botón de micrófono ni siquiera se muestra — no rompe nada en esos casos.
+const SpeechRecognitionApi =
+  typeof window !== "undefined"
+    ? window.SpeechRecognition || window.webkitSpeechRecognition
+    : null;
+
+const isVoiceSupported = !!SpeechRecognitionApi;
+const isRecording = ref(false);
+const voiceError = ref("");
+
+let recognition = null;
+
+const createRecognition = () => {
+  const instance = new SpeechRecognitionApi();
+  instance.lang = "es-CO";
+  instance.continuous = true;
+  instance.interimResults = true;
+
+  instance.onresult = (event) => {
+    let transcript = "";
+    for (let i = 0; i < event.results.length; i += 1) {
+      transcript += event.results[i][0].transcript;
+    }
+    input.value = transcript;
+  };
+
+  instance.onerror = (event) => {
+    isRecording.value = false;
+
+    if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+      voiceError.value = "No se pudo acceder al micrófono. Revisa los permisos del navegador.";
+    } else if (event.error === "no-speech") {
+      voiceError.value = "No detecté ningún audio. Intenta de nuevo.";
+    } else {
+      voiceError.value = "Hubo un problema con el reconocimiento de voz.";
+    }
+
+    setTimeout(() => { voiceError.value = ""; }, 4000);
+  };
+
+  instance.onend = () => {
+    isRecording.value = false;
+  };
+
+  return instance;
+};
+
+const toggleRecording = () => {
+  if (!isVoiceSupported) return;
+
+  if (!recognition) {
+    recognition = createRecognition();
+  }
+
+  if (isRecording.value) {
+    recognition.stop();
+    return;
+  }
+
+  voiceError.value = "";
+  input.value = "";
+  isRecording.value = true;
+
+  try {
+    recognition.start();
+  } catch {
+    // start() puede lanzar si ya estaba iniciado; se ignora, onend
+    // eventualmente resetea el estado.
+    isRecording.value = false;
+  }
+};
+
+onBeforeUnmount(() => {
+  if (recognition) {
+    recognition.onresult = null;
+    recognition.onerror = null;
+    recognition.onend = null;
+    recognition.stop();
+  }
+});
 </script>
 
 <template>
@@ -107,11 +190,24 @@ const clearChat = () => {
       </div>
     </div>
 
+    <p v-if="voiceError" class="chat__voice-error">🎤 {{ voiceError }}</p>
+
     <form class="chat__input-row" @submit.prevent="send">
+      <button
+        v-if="isVoiceSupported"
+        type="button"
+        class="chat__mic"
+        :class="{ 'chat__mic--recording': isRecording }"
+        :title="isRecording ? 'Detener grabación' : 'Hablar en vez de escribir'"
+        @click="toggleRecording"
+      >
+        {{ isRecording ? "⏹️" : "🎤" }}
+      </button>
+
       <textarea
         v-model="input"
         rows="1"
-        placeholder="Escribe un mensaje..."
+        :placeholder="isRecording ? 'Escuchando...' : 'Habla con el asistente'"
         :disabled="loading"
         @keydown="handleKeydown"
       ></textarea>
@@ -297,6 +393,53 @@ const clearChat = () => {
   }
 }
 
+.chat__voice-error {
+  padding: 8px 24px;
+  font-size: 12.5px;
+  color: #b91c1c;
+  background: #fef2f2;
+  border-top: 1px solid #fca5a5;
+}
+
+.chat__mic {
+  width: 46px;
+  height: 46px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  background: white;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: 0.2s;
+  flex-shrink: 0;
+}
+
+.chat__mic:hover {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.chat__mic--recording {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: white;
+  animation: chat-mic-pulse 1.4s infinite;
+}
+
+@keyframes chat-mic-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.45);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(220, 38, 38, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0);
+  }
+}
+
 .chat__input-row {
   display: flex;
   gap: 10px;
@@ -386,7 +529,6 @@ const clearChat = () => {
 .chat__messages {
   padding: 14px;
   gap: 10px;
-  height: 200px;
 }
 
 .chat__bubble {
@@ -403,8 +545,9 @@ const clearChat = () => {
   height: 42px;
 }
 
-.chat__empty {
-  margin: 20px 0;
+.chat__mic {
+  width: 42px;
+  height: 42px;
 }
 
 }
