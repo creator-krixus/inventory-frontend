@@ -215,6 +215,16 @@ const capitalize = (text) => {
     width:100%;
 }
 
+.table th{
+    font-size:15px;
+}
+
+.table th:nth-child(4),
+.table td:nth-child(4){
+    text-align:right;
+}
+
+
 }
 
 </style>
