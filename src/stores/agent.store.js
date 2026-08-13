@@ -46,20 +46,28 @@ export const useAgentStore = defineStore("agent", {
       }
     },
 
-    async sendMessage(text) {
+    async sendMessage(text, attachment = null) {
       const trimmed = (text || "").trim();
 
-      if (!trimmed || this.loading) return;
+      if ((!trimmed && !attachment) || this.loading) return;
 
       this.error = null;
 
-      this.messages.push({ id: generateId(), role: "user", text: trimmed });
+      this.messages.push({
+        id: generateId(),
+        role: "user",
+        text: trimmed,
+        // Solo se guarda el nombre/tipo para mostrar un chip en la
+        // burbuja — el base64 real NO se duplica acá (ya viaja dentro de
+        // `history`, que es lo que se persiste/reenvía a la API).
+        attachmentName: attachment?.name || null,
+      });
       this._persist();
 
       this.loading = true;
 
       try {
-        const { data } = await agentService.sendMessage(trimmed, this.history);
+        const { data } = await agentService.sendMessage(trimmed, this.history, attachment);
 
         this.history = data.history;
 
