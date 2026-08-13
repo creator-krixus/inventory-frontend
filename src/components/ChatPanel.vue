@@ -1,11 +1,29 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { useAgentStore } from "../stores/agent.store";
+import { prepareAttachment } from "../utils/attachments";
 
 const store = useAgentStore();
 
 const input = ref("");
 const listRef = ref(null);
+const textareaRef = ref(null);
+
+// Alto máximo antes de que el textarea empiece a hacer scroll interno en
+// vez de seguir creciendo (debe coincidir con max-height en el CSS).
+const MAX_TEXTAREA_HEIGHT = 160;
+
+const autoResizeTextarea = async () => {
+  await nextTick();
+  const el = textareaRef.value;
+  if (!el) return;
+  el.style.height = "auto";
+  el.style.height = `${Math.min(el.scrollHeight, MAX_TEXTAREA_HEIGHT)}px`;
+};
+
+// Cubre todos los casos por igual: tipeo normal, texto dictado por voz, y
+// cuando se limpia el input al enviar el mensaje (vuelve a su alto mínimo).
+watch(input, autoResizeTextarea);
 
 const messages = computed(() => store.messages);
 const loading = computed(() => store.loading);
@@ -28,8 +46,10 @@ watch(loading, scrollToBottom);
 
 const send = async () => {
   const text = input.value;
+  const attachment = pendingAttachment.value;
   input.value = "";
-  await store.sendMessage(text);
+  pendingAttachment.value = null;
+  await store.sendMessage(text, attachment);
 };
 
 const sendSuggestion = (text) => {
@@ -46,6 +66,46 @@ const handleKeydown = (event) => {
 const clearChat = () => {
   const confirmed = confirm("¿Borrar toda la conversación con el asistente?");
   if (confirmed) store.reset();
+};
+
+// ---- Adjuntar foto/PDF de factura ----
+const fileInputRef = ref(null);
+const pendingAttachment = ref(null); // { kind, mediaType, data, name, sizeLabel }
+const pendingPreviewUrl = ref(""); // solo para mostrar thumbnail de imágenes
+const attachError = ref("");
+const isProcessingAttachment = ref(false);
+
+const openFilePicker = () => {
+  fileInputRef.value?.click();
+};
+
+const onFileSelected = async (event) => {
+  const file = event.target.files?.[0];
+  event.target.value = ""; // permite volver a elegir el mismo archivo después
+
+  if (!file) return;
+
+  attachError.value = "";
+  isProcessingAttachment.value = true;
+
+  try {
+    const attachment = await prepareAttachment(file);
+    pendingAttachment.value = attachment;
+    pendingPreviewUrl.value = attachment.kind === "image" ? URL.createObjectURL(file) : "";
+  } catch (err) {
+    attachError.value = err.message || "No se pudo procesar el archivo.";
+    setTimeout(() => { attachError.value = ""; }, 5000);
+  } finally {
+    isProcessingAttachment.value = false;
+  }
+};
+
+const removePendingAttachment = () => {
+  if (pendingPreviewUrl.value) {
+    URL.revokeObjectURL(pendingPreviewUrl.value);
+  }
+  pendingAttachment.value = null;
+  pendingPreviewUrl.value = "";
 };
 
 // ---- Entrada por voz (Web Speech API) ----
@@ -140,6 +200,9 @@ onBeforeUnmount(() => {
     recognition.onend = null;
     recognition.stop();
   }
+  if (pendingPreviewUrl.value) {
+    URL.revokeObjectURL(pendingPreviewUrl.value);
+  }
 });
 </script>
 
@@ -190,7 +253,12 @@ onBeforeUnmount(() => {
         <div
           class="chat__bubble"
           :class="[`chat__bubble--${m.role}`, { 'chat__bubble--error': m.isError }]"
-        >{{ m.text }}</div>
+        >
+          <span v-if="m.attachmentName" class="chat__attachment-chip">
+            📎 {{ m.attachmentName }}
+          </span>
+          <template v-if="m.text">{{ m.text }}</template>
+        </div>
       </div>
 
       <div v-if="loading" class="chat__row chat__row--assistant">
@@ -201,8 +269,41 @@ onBeforeUnmount(() => {
     </div>
 
     <p v-if="voiceError" class="chat__voice-error">🎤 {{ voiceError }}</p>
+    <p v-if="attachError" class="chat__voice-error">📎 {{ attachError }}</p>
+
+    <div v-if="pendingAttachment" class="chat__attachment-preview">
+      <img v-if="pendingPreviewUrl" :src="pendingPreviewUrl" alt="Vista previa" />
+      <div v-else class="chat__attachment-preview-icon">📄</div>
+
+      <div class="chat__attachment-preview-info">
+        <strong>{{ pendingAttachment.name }}</strong>
+        <span>{{ pendingAttachment.sizeLabel }}</span>
+      </div>
+
+      <button type="button" class="chat__attachment-remove" title="Quitar archivo" @click="removePendingAttachment">
+        ✕
+      </button>
+    </div>
 
     <form class="chat__input-row" @submit.prevent="send">
+      <input
+        ref="fileInputRef"
+        type="file"
+        accept="image/jpeg,image/png,image/gif,image/webp,application/pdf"
+        class="chat__file-input"
+        @change="onFileSelected"
+      />
+
+      <button
+        type="button"
+        class="chat__attach"
+        title="Adjuntar foto o PDF de factura"
+        :disabled="isProcessingAttachment"
+        @click="openFilePicker"
+      >
+        {{ isProcessingAttachment ? "⏳" : "📎" }}
+      </button>
+
       <button
         v-if="isVoiceSupported"
         type="button"
@@ -215,6 +316,7 @@ onBeforeUnmount(() => {
       </button>
 
       <textarea
+        ref="textareaRef"
         v-model="input"
         rows="1"
         :placeholder="isRecording ? 'Escuchando...' : 'Habla con el asistente'"
@@ -225,7 +327,7 @@ onBeforeUnmount(() => {
       <button
         type="submit"
         class="chat__send"
-        :disabled="loading || !input.trim()"
+        :disabled="loading || (!input.trim() && !pendingAttachment)"
       >
         ➤
       </button>
@@ -411,6 +513,112 @@ onBeforeUnmount(() => {
   border-top: 1px solid #fca5a5;
 }
 
+.chat__attachment-chip {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.85;
+  margin-bottom: 4px;
+}
+
+.chat__attachment-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 24px;
+  border-top: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.chat__attachment-preview img {
+  width: 46px;
+  height: 46px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+}
+
+.chat__attachment-preview-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  background: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.chat__attachment-preview-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.chat__attachment-preview-info strong {
+  font-size: 13px;
+  color: #111827;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat__attachment-preview-info span {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.chat__attachment-remove {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid #d1d5db;
+  background: white;
+  color: #6b7280;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: 0.2s;
+}
+
+.chat__attachment-remove:hover {
+  border-color: #dc2626;
+  color: #dc2626;
+  background: #fef2f2;
+}
+
+.chat__file-input {
+  display: none;
+}
+
+.chat__attach {
+  width: 46px;
+  height: 46px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  background: white;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: 0.2s;
+  flex-shrink: 0;
+}
+
+.chat__attach:hover:not(:disabled) {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.chat__attach:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 .chat__mic {
   width: 46px;
   height: 46px;
@@ -452,6 +660,7 @@ onBeforeUnmount(() => {
 
 .chat__input-row {
   display: flex;
+  align-items: flex-end;
   gap: 10px;
   padding: 16px 24px;
   border-top: 1px solid #e5e7eb;
@@ -467,8 +676,9 @@ onBeforeUnmount(() => {
   font-size: 14px;
   font-family: inherit;
   outline: none;
-  transition: 0.2s;
-  max-height: 120px;
+  transition: height 0.15s ease, border-color 0.2s;
+  overflow-y: auto;
+  max-height: 160px;
 }
 
 .chat__input-row textarea:focus {
@@ -556,6 +766,11 @@ onBeforeUnmount(() => {
 }
 
 .chat__mic {
+  width: 42px;
+  height: 42px;
+}
+
+.chat__attach {
   width: 42px;
   height: 42px;
 }
