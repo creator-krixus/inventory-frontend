@@ -289,7 +289,7 @@ onBeforeUnmount(() => {
       <input
         ref="fileInputRef"
         type="file"
-        accept="image/jpeg,image/png,image/gif,image/webp,application/pdf"
+        accept="image/jpeg,image/png,image/gif,image/webp,image/heic,image/heif,.heic,.heif,application/pdf"
         class="chat__file-input"
         @change="onFileSelected"
       />

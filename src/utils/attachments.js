@@ -21,6 +21,50 @@ const fileToBase64 = (blob) =>
     reader.readAsDataURL(blob);
   });
 
+// Las fotos de iPhone se guardan por defecto en HEIC/HEIF. Ningún
+// navegador aparte de Safari puede decodificar ese formato de forma
+// nativa (ni con <img>, ni con <canvas>), así que sin esto el archivo
+// simplemente falla al procesarse en Chrome/Firefox/Android. El tipo
+// MIME de HEIC a veces llega vacío o distinto según el dispositivo, así
+// que también se revisa la extensión del archivo como respaldo.
+const isHeicFile = (file) =>
+  file.type === "image/heic" ||
+  file.type === "image/heif" ||
+  /\.(heic|heif)$/i.test(file.name);
+
+// Convierte HEIC/HEIF a JPEG en el navegador usando heic2any (decodifica
+// vía WebAssembly, funciona en cualquier navegador). Se importa de forma
+// perezosa (dynamic import) para no cargar esta librería pesada en el
+// bundle inicial si el usuario nunca sube una foto HEIC.
+const convertHeicToJpeg = async (file) => {
+  let heic2any;
+
+  try {
+    ({ default: heic2any } = await import("heic2any"));
+  } catch {
+    throw new Error(
+      "No se pudo cargar el conversor de HEIC. Intenta exportar la foto como JPG desde tu galería antes de subirla."
+    );
+  }
+
+  try {
+    const result = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.9 });
+    // heic2any puede devolver un array si el HEIC trae varias imágenes
+    // (ej. Live Photos/ráfagas); nos quedamos con la primera.
+    const blob = Array.isArray(result) ? result[0] : result;
+
+    return new File(
+      [blob],
+      file.name.replace(/\.(heic|heif)$/i, ".jpg"),
+      { type: "image/jpeg" }
+    );
+  } catch {
+    throw new Error(
+      "No se pudo convertir la foto HEIC. Prueba tomarla en formato JPG (Ajustes > Cámara > Formatos > Más compatible) o expórtala como JPG antes de subirla."
+    );
+  }
+};
+
 // Redimensiona/recomprime una imagen en el navegador si hace falta, para
 // que quepa bajo el límite de 5MB de la API. Las fotos de celular
 // normalmente pesan varios MB y superan ese límite fácilmente.
@@ -74,35 +118,40 @@ const resizeImageIfNeeded = (file) =>
 // el tipo, comprime si es imagen, y devuelve el objeto listo para mandar
 // al backend + datos livianos para mostrar en el chat.
 export const prepareAttachment = async (file) => {
-  const isImage = ALLOWED_IMAGE_TYPES.includes(file.type);
-  const isDocument = ALLOWED_DOCUMENT_TYPES.includes(file.type);
+  // Si es HEIC/HEIF, se convierte a JPEG PRIMERO — a partir de acá el resto
+  // del pipeline (validación, resize, base64) trabaja como si siempre
+  // hubiera sido un JPEG normal.
+  const workingFile = isHeicFile(file) ? await convertHeicToJpeg(file) : file;
+
+  const isImage = ALLOWED_IMAGE_TYPES.includes(workingFile.type);
+  const isDocument = ALLOWED_DOCUMENT_TYPES.includes(workingFile.type);
 
   if (!isImage && !isDocument) {
-    throw new Error("Solo se permiten imágenes (JPG, PNG, GIF, WEBP) o PDFs.");
+    throw new Error("Solo se permiten imágenes (JPG, PNG, GIF, WEBP, HEIC) o PDFs.");
   }
 
-  if (isDocument && file.size > MAX_DOCUMENT_BYTES) {
+  if (isDocument && workingFile.size > MAX_DOCUMENT_BYTES) {
     throw new Error("El PDF supera el máximo de 32 MB permitido.");
   }
 
-  let blob = file;
+  let blob = workingFile;
 
   if (isImage) {
-    blob = await resizeImageIfNeeded(file);
+    blob = await resizeImageIfNeeded(workingFile);
 
     if (blob.size > MAX_IMAGE_BYTES) {
       throw new Error("La imagen sigue siendo muy grande incluso después de comprimirla. Prueba con otra foto.");
     }
   }
 
-  const mediaType = isImage ? blob.type : file.type;
+  const mediaType = isImage ? blob.type : workingFile.type;
   const data = await fileToBase64(blob);
 
   return {
     kind: isImage ? "image" : "document",
     mediaType,
     data,
-    name: file.name,
+    name: workingFile.name,
     sizeLabel: `${(blob.size / 1024).toFixed(0)} KB`,
   };
 };
