@@ -49,7 +49,15 @@ export const useAgentStore = defineStore("agent", {
     async sendMessage(text, attachment = null) {
       const trimmed = (text || "").trim();
 
-      if ((!trimmed && !attachment) || this.loading) return;
+      if ((!trimmed && !attachment) || this.loading) {
+        console.warn(
+          "[Agent] sendMessage() ignorado —",
+          "trimmed vacío:", !trimmed,
+          "| sin attachment:", !attachment,
+          "| loading ya estaba en true:", this.loading
+        );
+        return;
+      }
 
       this.error = null;
 
@@ -66,6 +74,8 @@ export const useAgentStore = defineStore("agent", {
 
       this.loading = true;
 
+      const startedAt = performance.now();
+
       try {
         const { data } = await agentService.sendMessage(trimmed, this.history, attachment);
 
@@ -77,9 +87,19 @@ export const useAgentStore = defineStore("agent", {
           text: data.reply,
         });
       } catch (err) {
+        console.error(
+          `[Agent] Falló tras ${Math.round(performance.now() - startedAt)}ms —`,
+          "código:", err.code,
+          "| status:", err.response?.status,
+          "| data:", err.response?.data,
+          "| error completo:", err
+        );
+
         const message =
           err?.response?.data?.message ||
-          "No se pudo conectar con el asistente. Intenta de nuevo.";
+          (err.code === "ECONNABORTED"
+            ? "El asistente tardó demasiado en responder (más de 60s). Intenta de nuevo."
+            : "No se pudo conectar con el asistente. Intenta de nuevo.");
 
         this.error = message;
 

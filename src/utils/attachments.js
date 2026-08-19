@@ -23,14 +23,51 @@ const fileToBase64 = (blob) =>
 
 // Las fotos de iPhone se guardan por defecto en HEIC/HEIF. Ningún
 // navegador aparte de Safari puede decodificar ese formato de forma
-// nativa (ni con <img>, ni con <canvas>), así que sin esto el archivo
-// simplemente falla al procesarse en Chrome/Firefox/Android. El tipo
-// MIME de HEIC a veces llega vacío o distinto según el dispositivo, así
-// que también se revisa la extensión del archivo como respaldo.
-const isHeicFile = (file) =>
-  file.type === "image/heic" ||
-  file.type === "image/heif" ||
-  /\.(heic|heif)$/i.test(file.name);
+// nativa (ni con <img>, ni con <canvas>).
+//
+// PROBLEMA REAL: algunas apps/flujos de iOS (AirDrop, ciertas apps de
+// mensajería, etc.) renombran el archivo a ".jpeg" y reportan
+// type:"image/jpeg" SIN convertir realmente los bytes — el contenido
+// sigue siendo HEIC puro disfrazado de JPEG. Confiar solo en la
+// extensión/MIME (que puede mentir) deja pasar esos archivos sin
+// convertir, y Claude no puede leerlos.
+//
+// La solución robusta es mirar la FIRMA real del archivo: los HEIC/HEIF
+// son contenedores ISO-BMFF (como MP4), que siempre traen un box "ftyp"
+// en los primeros bytes seguido de un "major brand" identificable
+// (heic, heix, mif1, etc.) — eso no se puede disfrazar con solo
+// renombrar el archivo.
+const HEIC_BRANDS = ["heic", "heix", "hevc", "hevx", "heim", "heis", "hevm", "hevs", "mif1", "msf1"];
+
+const sniffIsHeicBySignature = async (file) => {
+  try {
+    // Bytes 4-7 del archivo = tipo de box (debe ser "ftyp");
+    // bytes 8-11 = major brand (heic, mif1, etc.)
+    const buffer = await file.slice(4, 12).arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    const boxType = String.fromCharCode(...bytes.slice(0, 4));
+    const brand = String.fromCharCode(...bytes.slice(4, 8)).toLowerCase();
+    return boxType === "ftyp" && HEIC_BRANDS.includes(brand);
+  } catch (err) {
+    console.error("[HEIC] No se pudo inspeccionar la firma del archivo:", err);
+    return false;
+  }
+};
+
+const isHeicFile = async (file) => {
+  const byNameOrType =
+    file.type === "image/heic" ||
+    file.type === "image/heif" ||
+    /\.(heic|heif)$/i.test(file.name);
+
+  if (byNameOrType) {
+    return true;
+  }
+
+  // Aunque diga "image/jpeg" y termine en .jpeg, se revisa la firma real
+  // por si el archivo viene "disfrazado" (caso real encontrado).
+  return sniffIsHeicBySignature(file);
+};
 
 // Convierte HEIC/HEIF a JPEG en el navegador usando heic2any (decodifica
 // vía WebAssembly, funciona en cualquier navegador). Se importa de forma
@@ -41,7 +78,8 @@ const convertHeicToJpeg = async (file) => {
 
   try {
     ({ default: heic2any } = await import("heic2any"));
-  } catch {
+  } catch (err) {
+    console.error("[HEIC] Error cargando heic2any (¿corriste npm install?):", err);
     throw new Error(
       "No se pudo cargar el conversor de HEIC. Intenta exportar la foto como JPG desde tu galería antes de subirla."
     );
@@ -58,7 +96,8 @@ const convertHeicToJpeg = async (file) => {
       file.name.replace(/\.(heic|heif)$/i, ".jpg"),
       { type: "image/jpeg" }
     );
-  } catch {
+  } catch (err) {
+    console.error("[HEIC] Error durante la conversión:", err);
     throw new Error(
       "No se pudo convertir la foto HEIC. Prueba tomarla en formato JPG (Ajustes > Cámara > Formatos > Más compatible) o expórtala como JPG antes de subirla."
     );
@@ -118,10 +157,13 @@ const resizeImageIfNeeded = (file) =>
 // el tipo, comprime si es imagen, y devuelve el objeto listo para mandar
 // al backend + datos livianos para mostrar en el chat.
 export const prepareAttachment = async (file) => {
+
   // Si es HEIC/HEIF, se convierte a JPEG PRIMERO — a partir de acá el resto
   // del pipeline (validación, resize, base64) trabaja como si siempre
   // hubiera sido un JPEG normal.
-  const workingFile = isHeicFile(file) ? await convertHeicToJpeg(file) : file;
+  const heicDetected = await isHeicFile(file);
+
+  const workingFile = heicDetected ? await convertHeicToJpeg(file) : file;
 
   const isImage = ALLOWED_IMAGE_TYPES.includes(workingFile.type);
   const isDocument = ALLOWED_DOCUMENT_TYPES.includes(workingFile.type);
@@ -145,6 +187,7 @@ export const prepareAttachment = async (file) => {
   }
 
   const mediaType = isImage ? blob.type : workingFile.type;
+
   const data = await fileToBase64(blob);
 
   return {

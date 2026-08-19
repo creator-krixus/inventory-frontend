@@ -91,8 +91,14 @@ const onFileSelected = async (event) => {
   try {
     const attachment = await prepareAttachment(file);
     pendingAttachment.value = attachment;
-    pendingPreviewUrl.value = attachment.kind === "image" ? URL.createObjectURL(file) : "";
+    // Se arma la preview desde el base64 YA PROCESADO (attachment.data),
+    // no desde el `file` original — si era HEIC, el `file` original no se
+    // puede mostrar en un <img> en la mayoría de navegadores, pero el
+    // JPEG ya convertido sí.
+    pendingPreviewUrl.value =
+      attachment.kind === "image" ? `data:${attachment.mediaType};base64,${attachment.data}` : "";
   } catch (err) {
+    console.error("[Attachment] Falló el procesamiento del archivo:", err);
     attachError.value = err.message || "No se pudo procesar el archivo.";
     setTimeout(() => { attachError.value = ""; }, 5000);
   } finally {
@@ -101,9 +107,6 @@ const onFileSelected = async (event) => {
 };
 
 const removePendingAttachment = () => {
-  if (pendingPreviewUrl.value) {
-    URL.revokeObjectURL(pendingPreviewUrl.value);
-  }
   pendingAttachment.value = null;
   pendingPreviewUrl.value = "";
 };
@@ -199,9 +202,6 @@ onBeforeUnmount(() => {
     recognition.onerror = null;
     recognition.onend = null;
     recognition.stop();
-  }
-  if (pendingPreviewUrl.value) {
-    URL.revokeObjectURL(pendingPreviewUrl.value);
   }
 });
 </script>
